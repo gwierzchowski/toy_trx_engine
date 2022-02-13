@@ -1,0 +1,16 @@
+[package]
+name = "toy_trx_engine"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+argh = "0.1"
+async-std = {version = "1.10", features = ["attributes"]}
+csv-async = {version = "1.2", features = ["with_serde"]}
+# csv = {version = "1.1"}
+#log = "0.4"
+futures = "0.3"
+serde = { version = "1", features = ["derive"]}
