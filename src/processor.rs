@@ -1,26 +1,26 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::io::Read;
 
-use anyhow::{Result, Context, bail};
-use async_std::stream::StreamExt;
-use csv_async::AsyncDeserializer;
-use futures::io::AsyncRead;
+use anyhow::{Result, bail};
+use csv::Reader;
 
 use crate::{
     TClientId,
     accounts::AccountState,
-    transactions::{TransactionValid, TransactionType, TransactionData, store_transaction},
+    transactions::{TransactionValid, TransactionRec, Transaction, TransactionInt},
 };
 
-pub async fn processing_loop<'r, R>(
-    mut data: AsyncDeserializer<R>, 
+/// Main transaction processing loop.
+/// Reads transactions from passed `data` and updates `accounts`.
+pub fn processing_loop<'r, R>(
+    mut data: Reader<R>, 
     accounts: &mut HashMap::<TClientId,AccountState>
 )   -> Result<u128>
-    where R: AsyncRead + Unpin + Send + 'r 
+    where R: Read + 'r 
 {
-    let mut transactions = HashSet::new();
-    let mut records = data.deserialize::<TransactionData>();
     let mut rec_no = 0u128;
-    while let Some(record) = records.next().await {
+    let mut processed_sucessfully = 0u128;
+    for record in data.deserialize() {
         rec_no += 1;
         if let Err(err) = record {
             if rec_no > 1 {
@@ -31,40 +31,30 @@ pub async fn processing_loop<'r, R>(
             }
         }
             
-        let transaction = record?;
+        let transaction_rec:TransactionRec = record?;
+        let transaction = transaction_rec.try_into();
+        if let Err(err) = transaction {
+            eprintln!("Record# {} - invalid (will be skipped): {}", rec_no, err);
+            continue;
+        }
+
+        let transaction:Transaction = transaction?;
         match transaction.validate() {
             TransactionValid::Ok => {},
             TransactionValid::Warn(msg) => {
-                eprintln!("Record# {}, Transaction ID = {} - validation warning: {}", rec_no, transaction.tx, msg);
+                eprintln!("Record# {}, Transaction ID = {} - validation warning: {}", rec_no, transaction.id(), msg);
             },
             TransactionValid::Invalid(msg) => {
-                eprintln!("Record# {}, Transaction ID = {} - invalid (will be skipped): {}", rec_no, transaction.tx, msg);
+                eprintln!("Record# {}, Transaction ID = {} - invalid (will be skipped): {}", rec_no, transaction.id(), msg);
                 continue;
             }
         }
         
-        if let Err(e) = store_transaction(&mut transactions, &transaction) {
-            eprintln!("Record# {}, Transaction ID = {} - discarded: {}", rec_no, transaction.tx, e);
+        if let Err(e) = transaction.commit(accounts) {
+            eprintln!("Record# {}, Transaction ID = {} - failed: {}", rec_no, transaction.id(), e);
             continue;
         }
-
-        match transaction.ttype {
-            TransactionType::Deposit => {
-                let trx_amount = transaction.amount.unwrap();
-                accounts.entry(transaction.client)
-                    .and_modify(|acct| (*acct).deposit(trx_amount).context("Deposit transaction")
-                        .unwrap_or_else(|e| eprintln!("Transaction ID = {} - failed: {:#}", transaction.tx, e))
-                    )
-                    .or_insert(AccountState::with_balance(trx_amount));},
-            TransactionType::Withdrawal => {
-                let trx_amount = transaction.amount.unwrap();
-                accounts.entry(transaction.client)
-                    .and_modify(|acct| (*acct).withdraw(trx_amount).context("Withdraw transaction")
-                    .unwrap_or_else(|e| eprintln!("Transaction ID = {} - failed: {:#}", transaction.tx, e))
-                )
-                    .or_insert(AccountState::with_balance(-trx_amount));},
-            TransactionType::Dispute => {}
-        };
+        processed_sucessfully += 1;
     }
-    Ok(rec_no)
+    Ok(processed_sucessfully)
 }

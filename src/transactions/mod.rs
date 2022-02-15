@@ -1,73 +1,96 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
+use enum_dispatch::enum_dispatch;
 use serde::Deserialize;
 
-use crate::{TClientId, TMoney, TTrxID};
+use crate::{
+    TClientId, TMoney, TTrxID,
+    accounts::AccountState
+};
 
-pub trait Transaction: From<TransactionData> {
+mod deposit;
+mod withdrawal;
+mod dispute;
+mod resolve;
+mod chargeback;
+
+use deposit::Deposit;
+use withdrawal::Withdrawal;
+use dispute::Dispute;
+use resolve::Resolve;
+use chargeback::Chargeback;
+
+/// Transaction Interface. Every transaction must implement it.
+/// `TryFrom` implementation should initialization of transaction from input record, 
+/// it may fail if input does not have all necessary data - in such case transaction will be discarded.
+#[enum_dispatch]
+pub trait TransactionInt: TryFrom<TransactionRec> {
+    /// Returns transaction id
+    fn id(&self) -> TTrxID;
+
+    /// Performs additional validation of transaction consistency with possibility to raise a warning.
+    /// In case of `Ok`, and `Warn` transaction is being processed, `Invalid` result cause transaction to be rejected.
     fn validate(&self) -> TransactionValid;
+
+    /// Actually performs transaction making necessary changes in passed accounts.
+    fn commit(&self, accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()>;
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum TransactionType {
+/// Transaction object.
+#[enum_dispatch(TransactionInt)]
+pub enum Transaction {
     Deposit,
     Withdrawal,
     Dispute,
+    Resolve,
+    Chargeback,
 }
 
+/// Result of transaction validation
+#[derive(PartialEq)]
+pub enum TransactionValid {
+    /// Transaction is valid and may be processed.
+    Ok,
+    /// Transaction is valid and may be processed, but passed message should be logged.
+    Warn(&'static str),
+    /// Transaction is invalid and should be rejected. Passed message should be logged.
+    Invalid(&'static str)
+}
+
+impl TryFrom<TransactionRec> for Transaction {
+    type Error = anyhow::Error;
+    fn try_from(td: TransactionRec) -> Result<Self, Self::Error> {
+        Ok(
+            match &td.ttype {
+                TransactionRecType::Deposit => Transaction::from(Deposit::try_from(td)?),
+                TransactionRecType::Withdrawal => Transaction::from(Withdrawal::try_from(td)?),
+                TransactionRecType::Dispute => Transaction::from(Dispute::try_from(td)?),
+                TransactionRecType::Resolve => Transaction::from(Resolve::try_from(td)?),
+                TransactionRecType::Chargeback => Transaction::from(Chargeback::try_from(td)?),
+            }
+        )
+    }
+}
+
+/// Transaction type as may occur in input file as small caps word (first column).
+#[derive(PartialEq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TransactionRecType {
+    Deposit,
+    Withdrawal,
+    Dispute,
+    Resolve,
+    Chargeback,
+}
+
+/// Represents transaction record as read from input file.
 #[derive(Deserialize)]
-pub struct TransactionData {
+pub struct TransactionRec {
     #[serde(rename = "type")]
-    pub ttype: TransactionType,
+    pub ttype: TransactionRecType,
     pub client: TClientId,
     pub tx: TTrxID,
     #[serde(default)]
     pub amount: Option<TMoney>,
-}
-
-#[derive(PartialEq)]
-pub enum TransactionValid {
-    Ok,
-    Warn(&'static str),
-    Invalid(&'static str)
-}
-
-impl TransactionData {
-    pub fn validate(&self) -> TransactionValid {
-        match self.ttype {
-            TransactionType::Deposit => 
-                if let Some(amt) = self.amount {
-                    if amt > 0.0 {TransactionValid::Ok}
-                    else if amt == 0.0 {TransactionValid::Warn("Amount == 0 in Deposit transaction")}
-                    else {TransactionValid::Invalid("Amount < 0 in Deposit transaction")}
-                } else {
-                    TransactionValid::Invalid("Amount not present in Deposit transaction")
-                },
-            TransactionType::Withdrawal => 
-                if let Some(amt) = self.amount {
-                    if amt > 0.0 {TransactionValid::Ok}
-                    else if amt == 0.0 {TransactionValid::Warn("Amount == 0 in Withdrawal transaction")}
-                    else {TransactionValid::Invalid("Amount < 0 in Withdrawal transaction")}
-                } else {
-                    TransactionValid::Invalid("Amount not present in Withdrawal transaction")
-                },
-            TransactionType::Dispute => 
-                if self.amount.is_none() {
-                    TransactionValid::Ok
-                } else {
-                    TransactionValid::Warn("Amount is present in Dispute transaction")
-                },
-        }
-    }
-}
-
-pub fn store_transaction(store: &mut HashSet<TTrxID>, transaction: &TransactionData) -> Result<()> {
-    assert!(! matches!(transaction.validate(), TransactionValid::Invalid(_)));
-    if store.insert(transaction.tx) {
-        Ok(())
-    } else {
-        bail!("Duplicated ID")
-    }
 }

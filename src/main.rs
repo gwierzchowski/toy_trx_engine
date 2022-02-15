@@ -1,49 +1,18 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 
-use anyhow::{Result, Context};
-use argh::FromArgs;
-use async_std::fs::File;
-use csv_async::{AsyncReaderBuilder};
+use anyhow::Result;
 
-pub type TClientId = u16;
-pub type TTrxID = u32;
-pub type TMoney = f64;
+use toy_trx_engine:: {
+    Args,
+    process,
+    accounts::AccountState,
+};
 
-mod accounts;
-mod processor;
-mod transactions;
-
-use accounts::AccountState;
-
-#[derive(FromArgs)]
-/// Toy Transaction Engine.
-struct Args {
-    /// use when transactions file has no headers
-    #[argh(switch)]
-    no_header: bool,
-
-    /// path to transactions file CSV file with columns (type,client,tx,amount)
-    #[argh(positional)]
-    trx_file: PathBuf,
-}
-
-#[async_std::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let arg: Args = argh::from_env();
-    let trx_file = File::open(arg.trx_file).await.context("opening transactions file")?;
-    let rdr = AsyncReaderBuilder::new()
-        .has_headers(!arg.no_header)
-        .trim(csv_async::Trim::All)
-        .flexible(true)
-        .create_deserializer(trx_file);
-
     let mut accounts = HashMap::new();
 
-    let _ = processor::processing_loop(
-        rdr, 
-        &mut accounts
-    ).await?;
+    let _ = process(&arg, &mut accounts)?;
 
     print!("client,");
     AccountState::print_headers_to_stdout();
