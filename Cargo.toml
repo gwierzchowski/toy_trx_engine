@@ -10,11 +10,8 @@ license = "MIT"
 [dependencies]
 anyhow = "1"
 argh = "0.1"
-async-std = {version = "1.10", features = ["attributes"]}
-async-trait = "0.1"
-csv-async = {version = "1.2", features = ["with_serde"]}
+csv = "1.1"
 enum_dispatch = "0.3"
-futures = "0.3"
 rust_decimal = "1"
 serde = { version = "1", features = ["derive"]}
 

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use serde::Deserialize;
 
@@ -25,7 +24,6 @@ use chargeback::Chargeback;
 /// Transaction Interface. Every transaction must implement it.
 /// `TryFrom` implementation should initialization of transaction from input record, 
 /// it may fail if input does not have all necessary data - in such case transaction will be discarded.
-#[async_trait]
 #[enum_dispatch]
 pub trait TransactionInt: TryFrom<TransactionRec> {
     /// Returns transaction id
@@ -36,7 +34,7 @@ pub trait TransactionInt: TryFrom<TransactionRec> {
     fn validate(&self) -> TransactionValid;
 
     /// Actually performs transaction making necessary changes in passed accounts.
-    async fn commit(&self, accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()>;
+    fn commit(&self, accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()>;
 }
 
 /// Transaction object.

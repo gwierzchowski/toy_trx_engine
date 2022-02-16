@@ -1,10 +1,10 @@
 use std::collections::HashMap;
+use std::fs::File;
 use std::path::PathBuf;
 
 use anyhow::{Result, Context};
 use argh::FromArgs;
-use async_std::fs::File;
-use csv_async::AsyncReaderBuilder;
+use csv::ReaderBuilder;
 
 /// Type to store client ID.
 pub type TClientId = u16;
@@ -40,15 +40,15 @@ pub struct Args {
 /// Performs transaction processing based on parameters passed in `Arg` argument, updates passed accounts object.
 /// Function separated from `main()` to feature integration tests.
 /// See Integration tests in `tests` folder for example usage.
-pub async fn process(arg:&Args, accounts: &mut HashMap::<TClientId,AccountState>) -> Result<u128> {
-    let trx_file = File::open(&arg.trx_file).await
+pub fn process(arg:&Args, accounts: &mut HashMap::<TClientId,AccountState>) -> Result<u128> {
+    let trx_file = File::open(&arg.trx_file)
         .with_context(|| format!("opening transactions file: {}", arg.trx_file.display()))?;
-    let rdr = AsyncReaderBuilder::new()
+    let rdr = ReaderBuilder::new()
         .has_headers(!arg.no_header)
         .comment(if arg.comments {Some(b'#')} else {None})
-        .trim(csv_async::Trim::All)
+        .trim(csv::Trim::All)
         .flexible(true)
-        .create_deserializer(trx_file);
-    let processed = processor::processing_loop(rdr, accounts).await?;
+        .from_reader(trx_file);
+    let processed = processor::processing_loop(rdr, accounts)?;
     Ok(processed)
 }
