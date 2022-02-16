@@ -13,7 +13,7 @@ pub type TClientId = u16;
 pub type TTrxID = u32;
 
 /// Type to store Money.
-pub type TMoney = f64; // TODO: Search if there are some crates dedicated to this (aka Java Money type)
+pub type TMoney = rust_decimal::Decimal;
 
 pub mod accounts;
 mod processor;

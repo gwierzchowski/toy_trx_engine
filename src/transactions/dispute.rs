@@ -62,13 +62,13 @@ impl TransactionInt for Dispute {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    
+    use rust_decimal_macros::dec;
     use crate::{
         TClientId,
-        accounts::AccountState, transactions::TransactionInt,
+        transactions::TransactionInt,
     };
     use super::*;
+    use super::super::tests::create_accounts;
     
     impl Dispute {
         #[allow(dead_code)]
@@ -77,114 +77,108 @@ mod tests {
         }
     }
 
-    fn create_accounts() -> HashMap::<TClientId,AccountState> {
-        let mut accounts = HashMap::<TClientId,AccountState>::new();
-        accounts.entry(1).or_default().locked = true;
-        accounts.entry(2).or_default().available = 2.0;
-        accounts
-    }
-
     #[test]
     fn on_locked() {
-        let mut accounts = create_accounts();
+        let mut accounts = create_accounts(&[dec!(0.0)]);
+        accounts.get_mut(&1).expect("client 1 in test accounts").locked = true;
         let trx = Dispute {client: 1, tx: 1};
         assert!(trx.commit(&mut accounts).is_err());
     }
     
     #[test]
     fn on_normal_deposit() {
-        let mut accounts = create_accounts();
-        let client = 2;
+        let mut accounts = create_accounts(&[dec!(2.0)]);
+        let client = 1;
         let tx = 1;
-        let amount = 1.5;
+        let amount = dec!(1.5);
         let trx1 = deposit::Deposit::test(client, tx, amount);
         assert!(trx1.commit(&mut accounts).is_ok());
         
-        let old_balance = accounts.get(&client).expect("client 2 in test accounts").available;
-        let old_total = accounts.get(&client).expect("client 2 in test accounts").total();
+        let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
+        let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
         let trx2 = Dispute {client, tx};
         assert!(trx2.commit(&mut accounts).is_ok());
-        let new_balance = accounts.get(&client).expect("client 2 in test accounts").available;
-        let new_total = accounts.get(&client).expect("client 2 in test accounts").total();
+        let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
+        let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance - amount, new_balance);
         assert_eq!(old_total, new_total);
     }
     
     #[test]
     fn on_normal_withdrawal() {
-        let mut accounts = create_accounts();
-        let client = 2;
+        let mut accounts = create_accounts(&[dec!(2.0)]);
+        let client = 1;
         let tx = 1;
-        let amount = 1.5;
+        let amount = dec!(1.5);
         let trx1 = withdrawal::Withdrawal::test(client, tx, amount);
         assert!(trx1.commit(&mut accounts).is_ok());
         
-        let old_balance = accounts.get(&client).expect("client 2 in test accounts").available;
-        let old_total = accounts.get(&client).expect("client 2 in test accounts").total();
+        let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
+        let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
         let trx2 = Dispute {client, tx};
         assert!(trx2.commit(&mut accounts).is_ok());
-        let new_balance = accounts.get(&client).expect("client 2 in test accounts").available;
-        let new_total = accounts.get(&client).expect("client 2 in test accounts").total();
+        let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
+        let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance + amount, new_balance);
         assert_eq!(old_total, new_total);
     }
     
     #[test]
     fn unknown_client() {
-        let mut accounts = create_accounts();
-        let trx = Dispute {client: 20, tx: 1};
+        let mut accounts = create_accounts(&[dec!(2.0)]);
+        let trx = Dispute {client: 10, tx: 1};
         assert!(accounts.get(&trx.client).is_none());
         assert!(trx.commit(&mut accounts).is_err());
     }
     
     #[test]
     fn unknown_transaction() {
-        let mut accounts = create_accounts();
-        let client = 2;
+        let mut accounts = create_accounts(&[dec!(2.0)]);
+        let client = 1;
         let tx = 1;
-        let amount = 1.5;
+        let amount = dec!(1.5);
         let trx1 = deposit::Deposit::test(client, tx, amount);
         assert!(trx1.commit(&mut accounts).is_ok());
         
-        let old_balance = accounts.get(&client).expect("client 2 in test accounts").available;
-        let old_total = accounts.get(&client).expect("client 2 in test accounts").total();
+        let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
+        let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
         let trx2 = Dispute {client, tx: tx + 1};
         assert!(trx2.commit(&mut accounts).is_err());
-        let new_balance = accounts.get(&client).expect("client 2 in test accounts").available;
-        let new_total = accounts.get(&client).expect("client 2 in test accounts").total();
+        let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
+        let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance, new_balance);
         assert_eq!(old_total, new_total);
     }
     
     #[test]
     fn second_dispute() {
-        let mut accounts = create_accounts();
-        let client = 2;
+        let mut accounts = create_accounts(&[dec!(2.0)]);
+        let client = 1;
         let tx = 1;
-        let amount = 1.5;
+        let amount = dec!(1.5);
         let trx1 = deposit::Deposit::test(client, tx, amount);
         assert!(trx1.commit(&mut accounts).is_ok());
         
-        let old_balance = accounts.get(&client).expect("client 2 in test accounts").available;
-        let old_total = accounts.get(&client).expect("client 2 in test accounts").total();
+        let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
+        let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
         let trx2 = Dispute {client, tx};
         assert!(trx2.commit(&mut accounts).is_ok());
         let trx3 = Dispute {client, tx};
         assert!(trx3.commit(&mut accounts).is_ok());
-        let new_balance = accounts.get(&client).expect("client 2 in test accounts").available;
-        let new_total = accounts.get(&client).expect("client 2 in test accounts").total();
+        let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
+        let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance - amount, new_balance); // only first dispute affected balance
         assert_eq!(old_total, new_total);
     }
     
     #[test]
     fn on_failed() {
-        let mut accounts = create_accounts();
-        let client = 2;
-        let trx1 = withdrawal::Withdrawal::test(client, 1, 1.0);
+        let mut accounts = create_accounts(&[dec!(2.0)]);
+        let client = 1;
+        let trx1 = withdrawal::Withdrawal::test(client, 1, dec!(1.0));
         assert!(trx1.commit(&mut accounts).is_ok());
-        let balance = accounts.get(&client).expect("client 2 in test accounts").available;
-        let trx2 = withdrawal::Withdrawal::test(client, 2, balance + 1.0);
+        let balance = accounts.get(&client).expect("client 1 in test accounts").available;
+        let trx2 = withdrawal::Withdrawal::test(client, 2, balance + dec!(1.0));
         assert!(trx2.commit(&mut accounts).is_err()); // over balance
         let trx3 = Dispute {client, tx: 2};
         assert!(trx3.commit(&mut accounts).is_err()); // dispute to failed transaction

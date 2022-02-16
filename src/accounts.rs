@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use rust_decimal::{self, Decimal};
+
 use crate::{TMoney, TTrxID};
 
 /// Represents state of Client Account
@@ -16,13 +18,13 @@ pub struct AccountState {
     
     /// List of transactions
     /// Value stands for pair (trx is under dispute, trx amount (negative if withdrawal))
-    pub transactions: HashMap<TTrxID, (bool,TMoney)>,
+    pub transactions: HashMap<TTrxID, (bool, TMoney)>,
 }
 
 // Implemented manually for better clarity
 impl Default for AccountState {
     fn default() -> Self {
-        Self { available: 0.0, held: 0.0, locked: false, transactions: HashMap::new() }
+        Self { available: Decimal::ZERO, held: Decimal::ZERO, locked: false, transactions: HashMap::new() }
     }
 }
 

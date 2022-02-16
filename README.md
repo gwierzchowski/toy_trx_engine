@@ -21,6 +21,8 @@ My first idea was creating transaction state machine with transaction passing th
 
 I also tried to keep dependencies under control, taking only those that are really needed or small and safe. Program does not contain any direct code using `unsafe` annotation. Dependencies were checked using audit cargo extension.
 
+I used `rust_decimal` crate to support money calculation. It is quite widely used crate and utilized for money-specialized crate: `rusty-money` so I assume it passed some testing. This is acceptable for toy-tool. But for real production system, I would better either write more extensive and comprehensive test suite to prove library calculates properly (including performance tests) or use 128-bit integers internally to calculate money and only convert for i/o - it may be faster.
+
 For transaction types dispatching I used enum-based dispatching supported by 3rd party crate `enum_dispatch` that limited boiler-plate code. The code would be maybe simpler if I use dynamic dispatching, but this would be at cost of some extra memory allocations and virtual methods calls, so I takes in my opinion fair performance / simplicity compromise.
 
 I assumed that external transaction IDs (`tx`) are unique for particular client (it is weaker assumption then suggested in requirements). Checking global transaction ID uniqueness would bring additional cost - not strictly necessary for system correctness. There is one exception - if transaction is rejected I do not remember its id - i.e. I allow another transaction for the same client with the same ID to be later present. It is kind of compromise support for such scenario would need extra processing and memory, and lack of it may cause debugging harder (looking at input file we are not sure to which transaction reference applies). In my opinion implementing such check in real system would be recommended, but not necessarily for toy-like.
@@ -28,8 +30,6 @@ I assumed that external transaction IDs (`tx`) are unique for particular client 
 ## Status / Remaining work
 
 Provided points are in more-less ordered by priority.
-
-- There are missing unit and integration tests for having more that one transaction in 'on dispute' state - write necessary cases.
 
 - Make program use of multi-threading and async programming. Currently accounts are pretty much isolated each other, every transaction refers to previous ones done on the same account. This can be utilized by implementing possibly lock-free concurrent algorithms. Initial idea would be to shard accounts pool e.g. by dividing client_id modulo number of workers and dispatch work according to reminder to separate threads or tasks. Approach with creating separate task per each transaction is also possible but more complicated - to ensure processing transactions in order we would have to assign sequential serial number (e.g. record number) and store it into transaction, and then synchronize tasks (for the same customer) to ensure sequential processing. In the future if system would have to be extended for cross accounts transactions (e.g. transfer), some such mechanisms would have to be implemented anyway.
 
@@ -45,7 +45,7 @@ Provided points are in more-less ordered by priority.
 
 - Performance tests. Tests on huge data sets.
 
-- Float calculations - currently naive approach was taken.
+- Float calculations - write more extensive and complete tests - maybe use some arbitrary calculation crates (e.g. `num` (num_rational)) as reference and use randomly generated numbers.
 
 - Introduce logging thru `log` interface instead of printing to `stderr`.
 
@@ -60,3 +60,8 @@ Provided points are in more-less ordered by priority.
 - It looks like error handling in case when `trim` on CSV reader is not set and there are spaces between data is not good (rec, line, byte info is misleading), and also in case when `has_headers` is not properly set. To investigate and possibly open issue/PR for `csv-core` crate 
 
 - `csv_async` should re-export futures/tokio::io::AsyncRead.
+
+## License
+
+This program is available under MIT license.  
+Author: Grzegorz Wierzchowski (gwierzchowski@wp.pl)

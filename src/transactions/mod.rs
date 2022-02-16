@@ -5,7 +5,7 @@ use enum_dispatch::enum_dispatch;
 use serde::Deserialize;
 
 use crate::{
-    TClientId, TMoney, TTrxID,
+    TClientId, TTrxID,
     accounts::AccountState
 };
 
@@ -92,5 +92,23 @@ pub struct TransactionRec {
     pub client: TClientId,
     pub tx: TTrxID,
     #[serde(default)]
-    pub amount: Option<TMoney>,
+    pub amount: Option<f64>, // Option<TMoney> is possible here, but maybe f64 will be faster
+}
+
+mod tests {
+    use std::collections::HashMap;
+    
+    use crate::{
+        TClientId, TMoney,
+        accounts::AccountState,
+    };
+
+    #[allow(dead_code)]
+    pub fn create_accounts(balance: &[TMoney]) -> HashMap::<TClientId,AccountState> {
+        let mut accounts = HashMap::<TClientId,AccountState>::new();
+        for (id, bal) in balance.iter().enumerate() {
+            accounts.entry(id as TClientId + 1).or_default().available = *bal;
+        }
+        accounts
+    }
 }

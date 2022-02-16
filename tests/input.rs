@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use argh::FromArgs;
+use rust_decimal_macros::dec;
 
 use toy_trx_engine::{Args, process};
 
@@ -15,7 +16,7 @@ fn amt_formats() {
     let rec = process(&arg, &mut accounts).expect("success");
     assert_eq!(rec, 5);
     let total = accounts.get(&2).expect("client 2 in test file").total();
-    assert_eq!(total, 5.4321);
+    assert_eq!(total, dec!(5.4321));
 }
 
 #[test]

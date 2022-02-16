@@ -1,6 +1,6 @@
 use std::collections::hash_map::Entry;
 
-use anyhow::{Result, bail};
+use anyhow::{Result, Context, bail};
 
 use crate::{TClientId, TMoney, TTrxID};
 use super::*;
@@ -19,7 +19,12 @@ impl TryFrom<TransactionRec> for Deposit {
             bail!("Transaction ID {} - Incompatible type expected Deposit", value.tx)
         } 
         else if let Some(amount) = value.amount {
-            Ok(Self {client: value.client, tx: value.tx, amount})
+            Ok(Self {
+                client: value.client, 
+                tx: value.tx, 
+                amount: amount.try_into()
+                    .with_context(|| format!("Transaction ID {} - Parsing float value: {}", value.tx, amount))?
+            })
         } else {
             bail!("Transaction ID {} - Amount is missing in Deposit transaction", value.tx)
         }
@@ -30,9 +35,9 @@ impl TransactionInt for Deposit {
     fn id(&self) -> TTrxID {self.tx}
 
     fn validate(&self) -> TransactionValid {
-        if self.amount > 0.0 {
+        if self.amount.is_sign_positive() {
             TransactionValid::Ok
-        } else if self.amount == 0.0 {
+        } else if self.amount.is_zero() {
             TransactionValid::Warn("Amount == 0 in Deposit transaction")
         } else {
             TransactionValid::Invalid("Amount < 0 in Deposit transaction")
@@ -70,48 +75,39 @@ impl TransactionInt for Deposit {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    
-    use crate::{
-        TClientId,
-        accounts::AccountState, transactions::TransactionInt,
-    };
+    use rust_decimal_macros::dec;
+    use crate::transactions::TransactionInt;
     use super::*;
+    use super::super::tests::create_accounts;
 
     impl Deposit {
         pub fn test(client:TClientId, tx:TTrxID, amount:TMoney) -> Self {
             Self {client, tx, amount}
         }
     }
-    
-    fn create_accounts() -> HashMap::<TClientId,AccountState> {
-        let mut accounts = HashMap::<TClientId,AccountState>::new();
-        accounts.entry(1).or_default().locked = true;
-        accounts.entry(2).or_default().available = 2.0;
-        accounts
-    }
 
     #[test]
     fn on_locked() {
-        let mut accounts = create_accounts();
-        let trx = Deposit {client: 1, tx: 1, amount: 1.0};
+        let mut accounts = create_accounts(&[dec!(0.0)]);
+        accounts.get_mut(&1).expect("client 1 in test accounts").locked = true;
+        let trx = Deposit {client: 1, tx: 1, amount: dec!(1.0)};
         assert!(trx.commit(&mut accounts).is_err());
     }
     
     #[test]
     fn on_normal() {
-        let mut accounts = create_accounts();
-        let trx = Deposit {client: 2, tx: 1, amount: 1.0};
-        let old_balance = accounts.get(&trx.client).expect("client 2 in test accounts").available;
+        let mut accounts = create_accounts(&[dec!(2.0)]);
+        let trx = Deposit {client: 1, tx: 1, amount: dec!(1.0)};
+        let old_balance = accounts.get(&trx.client).expect("client 1 in test accounts").available;
         assert!(trx.commit(&mut accounts).is_ok());
-        let new_balance = accounts.get(&trx.client).expect("client 2 in test accounts").available;
+        let new_balance = accounts.get(&trx.client).expect("client 1 in test accounts").available;
         assert_eq!(old_balance + trx.amount, new_balance);
     }
     
     #[test]
     fn new_client() {
-        let mut accounts = create_accounts();
-        let trx = Deposit {client: 20, tx: 1, amount: 1.0};
+        let mut accounts = create_accounts(&[dec!(2.0)]);
+        let trx = Deposit {client: 10, tx: 1, amount: dec!(1.0)};
         assert!(accounts.get(&trx.client).is_none());
         assert!(trx.commit(&mut accounts).is_ok());
         let new_balance = accounts.get(&trx.client).expect("new client in test accounts").available;
@@ -120,12 +116,12 @@ mod tests {
     
     #[test]
     fn duplicated_tx_id() {
-        let mut accounts = create_accounts();
-        let trx1 = Deposit {client: 2, tx: 1, amount: 0.1};
+        let mut accounts = create_accounts(&[dec!(2.0)]);
+        let trx1 = Deposit {client: 1, tx: 1, amount: dec!(0.1)};
         assert!(trx1.commit(&mut accounts).is_ok());
-        let trx2 = Deposit {client: 2, tx: 1, amount: 0.1};
+        let trx2 = Deposit {client: 1, tx: 1, amount: dec!(0.1)};
         assert!(trx2.commit(&mut accounts).is_err()); // duplicated id
-        let trx3 = Deposit {client: 2, tx: 2, amount: 0.1};
+        let trx3 = Deposit {client: 1, tx: 2, amount: dec!(0.1)};
         assert!(trx3.commit(&mut accounts).is_ok());
     }
 }

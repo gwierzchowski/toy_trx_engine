@@ -2,6 +2,8 @@
 name = "toy_trx_engine"
 version = "0.1.0"
 edition = "2021"
+authors = ["gwierzchowski <gwierzchowski@wp.pl>"]
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,4 +12,8 @@ anyhow = "1"
 argh = "0.1"
 csv = "1.1"
 enum_dispatch = "0.3"
+rust_decimal = "1"
 serde = { version = "1", features = ["derive"]}
+
+[dev-dependencies]
+rust_decimal_macros = "1"
