@@ -8,11 +8,12 @@ use toy_trx_engine:: {
     accounts::AccountState,
 };
 
-fn main() -> Result<()> {
+#[async_std::main]
+async fn main() -> Result<()> {
     let arg: Args = argh::from_env();
     let mut accounts = HashMap::new();
 
-    let _ = process(&arg, &mut accounts)?;
+    let _ = process(&arg, &mut accounts).await?;
 
     print!("client,");
     AccountState::print_headers_to_stdout();

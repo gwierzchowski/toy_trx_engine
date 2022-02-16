@@ -31,6 +31,7 @@ impl TryFrom<TransactionRec> for Deposit {
     }
 }
 
+#[async_trait]
 impl TransactionInt for Deposit {
     fn id(&self) -> TTrxID {self.tx}
 
@@ -49,7 +50,7 @@ impl TransactionInt for Deposit {
     /// - if account is locked - reject.
     /// - if there is already registered transaction with the same ID - reject.
     /// - otherwise increase account `available` property of given `amount` and stores transaction amount.
-    fn commit(&self, accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()> {
+    async fn commit(&self, accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()> {
         match accounts.get_mut(&self.client) {
             Some(acct) => {
                 if acct.locked {
@@ -86,42 +87,42 @@ mod tests {
         }
     }
 
-    #[test]
-    fn on_locked() {
+    #[async_std::test]
+    async fn on_locked() {
         let mut accounts = create_accounts(&[dec!(0.0)]);
         accounts.get_mut(&1).expect("client 1 in test accounts").locked = true;
         let trx = Deposit {client: 1, tx: 1, amount: dec!(1.0)};
-        assert!(trx.commit(&mut accounts).is_err());
+        assert!(trx.commit(&mut accounts).await.is_err());
     }
     
-    #[test]
-    fn on_normal() {
+    #[async_std::test]
+    async fn on_normal() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let trx = Deposit {client: 1, tx: 1, amount: dec!(1.0)};
         let old_balance = accounts.get(&trx.client).expect("client 1 in test accounts").available;
-        assert!(trx.commit(&mut accounts).is_ok());
+        assert!(trx.commit(&mut accounts).await.is_ok());
         let new_balance = accounts.get(&trx.client).expect("client 1 in test accounts").available;
         assert_eq!(old_balance + trx.amount, new_balance);
     }
     
-    #[test]
-    fn new_client() {
+    #[async_std::test]
+    async fn new_client() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let trx = Deposit {client: 10, tx: 1, amount: dec!(1.0)};
         assert!(accounts.get(&trx.client).is_none());
-        assert!(trx.commit(&mut accounts).is_ok());
+        assert!(trx.commit(&mut accounts).await.is_ok());
         let new_balance = accounts.get(&trx.client).expect("new client in test accounts").available;
         assert_eq!(trx.amount, new_balance);
     }
     
-    #[test]
-    fn duplicated_tx_id() {
+    #[async_std::test]
+    async fn duplicated_tx_id() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let trx1 = Deposit {client: 1, tx: 1, amount: dec!(0.1)};
-        assert!(trx1.commit(&mut accounts).is_ok());
+        assert!(trx1.commit(&mut accounts).await.is_ok());
         let trx2 = Deposit {client: 1, tx: 1, amount: dec!(0.1)};
-        assert!(trx2.commit(&mut accounts).is_err()); // duplicated id
+        assert!(trx2.commit(&mut accounts).await.is_err()); // duplicated id
         let trx3 = Deposit {client: 1, tx: 2, amount: dec!(0.1)};
-        assert!(trx3.commit(&mut accounts).is_ok());
+        assert!(trx3.commit(&mut accounts).await.is_ok());
     }
 }
