@@ -20,7 +20,7 @@ impl TryFrom<TransactionRec> for Dispute {
     }
 }
 
-
+#[async_trait]
 impl TransactionInt for Dispute {
     fn id(&self) -> TTrxID {self.tx}
 
@@ -35,7 +35,7 @@ impl TransactionInt for Dispute {
     /// - if referenced transaction is already in 'on dispute' state logs warning but not reject transaction.
     /// - otherwise puts referenced transaction in 'on dispute' state 
     ///   and decreases account `available` property of given `amount`.
-    fn commit(&self, accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()> {
+    async fn commit(&self, accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()> {
         match accounts.get_mut(&self.client) {
             Some(acct) => {
                 if acct.locked {
@@ -77,110 +77,110 @@ mod tests {
         }
     }
 
-    #[test]
-    fn on_locked() {
+    #[async_std::test]
+    async fn on_locked() {
         let mut accounts = create_accounts(&[dec!(0.0)]);
         accounts.get_mut(&1).expect("client 1 in test accounts").locked = true;
         let trx = Dispute {client: 1, tx: 1};
-        assert!(trx.commit(&mut accounts).is_err());
+        assert!(trx.commit(&mut accounts).await.is_err());
     }
     
-    #[test]
-    fn on_normal_deposit() {
+    #[async_std::test]
+    async fn on_normal_deposit() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let client = 1;
         let tx = 1;
         let amount = dec!(1.5);
         let trx1 = deposit::Deposit::test(client, tx, amount);
-        assert!(trx1.commit(&mut accounts).is_ok());
+        assert!(trx1.commit(&mut accounts).await.is_ok());
         
         let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
         let trx2 = Dispute {client, tx};
-        assert!(trx2.commit(&mut accounts).is_ok());
+        assert!(trx2.commit(&mut accounts).await.is_ok());
         let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance - amount, new_balance);
         assert_eq!(old_total, new_total);
     }
     
-    #[test]
-    fn on_normal_withdrawal() {
+    #[async_std::test]
+    async fn on_normal_withdrawal() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let client = 1;
         let tx = 1;
         let amount = dec!(1.5);
         let trx1 = withdrawal::Withdrawal::test(client, tx, amount);
-        assert!(trx1.commit(&mut accounts).is_ok());
+        assert!(trx1.commit(&mut accounts).await.is_ok());
         
         let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
         let trx2 = Dispute {client, tx};
-        assert!(trx2.commit(&mut accounts).is_ok());
+        assert!(trx2.commit(&mut accounts).await.is_ok());
         let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance + amount, new_balance);
         assert_eq!(old_total, new_total);
     }
     
-    #[test]
-    fn unknown_client() {
+    #[async_std::test]
+    async fn unknown_client() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let trx = Dispute {client: 10, tx: 1};
         assert!(accounts.get(&trx.client).is_none());
-        assert!(trx.commit(&mut accounts).is_err());
+        assert!(trx.commit(&mut accounts).await.is_err());
     }
     
-    #[test]
-    fn unknown_transaction() {
+    #[async_std::test]
+    async fn unknown_transaction() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let client = 1;
         let tx = 1;
         let amount = dec!(1.5);
         let trx1 = deposit::Deposit::test(client, tx, amount);
-        assert!(trx1.commit(&mut accounts).is_ok());
+        assert!(trx1.commit(&mut accounts).await.is_ok());
         
         let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
         let trx2 = Dispute {client, tx: tx + 1};
-        assert!(trx2.commit(&mut accounts).is_err());
+        assert!(trx2.commit(&mut accounts).await.is_err());
         let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance, new_balance);
         assert_eq!(old_total, new_total);
     }
     
-    #[test]
-    fn second_dispute() {
+    #[async_std::test]
+    async fn second_dispute() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let client = 1;
         let tx = 1;
         let amount = dec!(1.5);
         let trx1 = deposit::Deposit::test(client, tx, amount);
-        assert!(trx1.commit(&mut accounts).is_ok());
+        assert!(trx1.commit(&mut accounts).await.is_ok());
         
         let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
         let trx2 = Dispute {client, tx};
-        assert!(trx2.commit(&mut accounts).is_ok());
+        assert!(trx2.commit(&mut accounts).await.is_ok());
         let trx3 = Dispute {client, tx};
-        assert!(trx3.commit(&mut accounts).is_ok());
+        assert!(trx3.commit(&mut accounts).await.is_ok());
         let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance - amount, new_balance); // only first dispute affected balance
         assert_eq!(old_total, new_total);
     }
     
-    #[test]
-    fn on_failed() {
+    #[async_std::test]
+    async fn on_failed() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let client = 1;
         let trx1 = withdrawal::Withdrawal::test(client, 1, dec!(1.0));
-        assert!(trx1.commit(&mut accounts).is_ok());
+        assert!(trx1.commit(&mut accounts).await.is_ok());
         let balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let trx2 = withdrawal::Withdrawal::test(client, 2, balance + dec!(1.0));
-        assert!(trx2.commit(&mut accounts).is_err()); // over balance
+        assert!(trx2.commit(&mut accounts).await.is_err()); // over balance
         let trx3 = Dispute {client, tx: 2};
-        assert!(trx3.commit(&mut accounts).is_err()); // dispute to failed transaction
+        assert!(trx3.commit(&mut accounts).await.is_err()); // dispute to failed transaction
     }
 }
