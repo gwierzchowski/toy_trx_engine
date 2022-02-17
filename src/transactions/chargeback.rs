@@ -20,9 +20,10 @@ impl TryFrom<TransactionRec> for Chargeback {
     }
 }
 
-#[async_trait]
 impl TransactionInt for Chargeback {
     fn id(&self) -> TTrxID {self.tx}
+
+    fn client_id(&self) -> TClientId {self.client}
 
     fn validate(&self) -> TransactionValid {
         TransactionValid::Ok
@@ -35,7 +36,7 @@ impl TransactionInt for Chargeback {
     /// - if referenced transaction is not 'on dispute' state - reject.
     /// - otherwise releases referenced transaction from 'on dispute' state, 
     ///   releases money reserved on case of Resolve transaction and locks account.
-    async fn commit(&self, accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()> {
+    fn commit(&self, accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()> {
         match accounts.get_mut(&self.client) {
             Some(acct) => {
                 if acct.locked {
@@ -64,22 +65,22 @@ mod tests {
     use super::*;
     use super::super::tests::create_accounts;
 
-    #[async_std::test]
-    async fn on_locked() {
+    #[test]
+    fn on_locked() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         accounts.get_mut(&1).expect("client 1 in test accounts").locked = true;
         let trx = Chargeback {client: 1, tx: 1};
-        assert!(trx.commit(&mut accounts).await.is_err());
+        assert!(trx.commit(&mut accounts).is_err());
     }
     
-    #[async_std::test]
-    async fn on_normal_deposit() {
+    #[test]
+    fn on_normal_deposit() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let client = 1;
         let tx = 1;
         let amount = dec!(1.5);
         let trx1 = deposit::Deposit::test(client, tx, amount);
-        assert!(trx1.commit(&mut accounts).await.is_ok());
+        assert!(trx1.commit(&mut accounts).is_ok());
         
         let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
@@ -90,9 +91,9 @@ mod tests {
                 tx,
                 amount: None
             }).expect("Dispute transaction from transaction record");
-        assert!(trx2.commit(&mut accounts).await.is_ok());
+        assert!(trx2.commit(&mut accounts).is_ok());
         let trx3 = Chargeback {client, tx};
-        assert!(trx3.commit(&mut accounts).await.is_ok());
+        assert!(trx3.commit(&mut accounts).is_ok());
         let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance - amount, new_balance);
@@ -100,14 +101,14 @@ mod tests {
         assert!(accounts.get(&client).expect("client 1 in test accounts").locked);
     }
     
-    #[async_std::test]
-    async fn on_normal_withdrawal() {
+    #[test]
+    fn on_normal_withdrawal() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let client = 1;
         let tx = 1;
         let amount = dec!(1.5);
         let trx1 = withdrawal::Withdrawal::test(client, tx, amount);
-        assert!(trx1.commit(&mut accounts).await.is_ok());
+        assert!(trx1.commit(&mut accounts).is_ok());
         
         let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
@@ -118,9 +119,9 @@ mod tests {
                 tx,
                 amount: None
             }).expect("Dispute transaction from transaction record");
-        assert!(trx2.commit(&mut accounts).await.is_ok());
+        assert!(trx2.commit(&mut accounts).is_ok());
         let trx3 = Chargeback {client, tx};
-        assert!(trx3.commit(&mut accounts).await.is_ok());
+        assert!(trx3.commit(&mut accounts).is_ok());
         let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance + amount, new_balance);
@@ -128,27 +129,27 @@ mod tests {
         assert!(accounts.get(&client).expect("client 1 in test accounts").locked);
     }
     
-    #[async_std::test]
-    async fn unknown_client() {
+    #[test]
+    fn unknown_client() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let trx = Chargeback {client: 10, tx: 1};
         assert!(accounts.get(&trx.client).is_none());
-        assert!(trx.commit(&mut accounts).await.is_err());
+        assert!(trx.commit(&mut accounts).is_err());
     }
     
-    #[async_std::test]
-    async fn unknown_transaction() {
+    #[test]
+    fn unknown_transaction() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let client = 1;
         let tx = 1;
         let amount = dec!(1.5);
         let trx1 = deposit::Deposit::test(client, tx, amount);
-        assert!(trx1.commit(&mut accounts).await.is_ok());
+        assert!(trx1.commit(&mut accounts).is_ok());
         
         let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
         let trx2 = Chargeback {client, tx: tx + 1};
-        assert!(trx2.commit(&mut accounts).await.is_err());
+        assert!(trx2.commit(&mut accounts).is_err());
         let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance, new_balance);
@@ -156,19 +157,19 @@ mod tests {
         assert!(! accounts.get(&client).expect("client 1 in test accounts").locked);
     }
     
-    #[async_std::test]
-    async fn chargeback_without_dispute() {
+    #[test]
+    fn chargeback_without_dispute() {
         let mut accounts = create_accounts(&[dec!(2.0)]);
         let client = 1;
         let tx = 1;
         let amount = dec!(1.5);
         let trx1 = withdrawal::Withdrawal::test(client, tx, amount);
-        assert!(trx1.commit(&mut accounts).await.is_ok());
+        assert!(trx1.commit(&mut accounts).is_ok());
         
         let old_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let old_total = accounts.get(&client).expect("client 1 in test accounts").total();
         let trx3 = Chargeback {client, tx};
-        assert!(trx3.commit(&mut accounts).await.is_err());
+        assert!(trx3.commit(&mut accounts).is_err());
         let new_balance = accounts.get(&client).expect("client 1 in test accounts").available;
         let new_total = accounts.get(&client).expect("client 1 in test accounts").total();
         assert_eq!(old_balance, new_balance);

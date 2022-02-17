@@ -31,8 +31,16 @@ pub struct Args {
     /// use to skip lines that begin with '#' in transaction file
     #[argh(switch)]
     comments: bool,
+    
+    /// number of workers to process transactions (default: CPU cores)
+    #[argh(option, default = "num_cpus::get()")]
+    wrk_num: usize,
+    
+    /// buffer size x1000 for worker queue until it blocks (default: 10)
+    #[argh(option, default = "10")]
+    wrk_buff: usize,
 
-    /// path to transactions file CSV file with columns (type,client,tx,amount)
+    /// path to transactions CSV file with columns (type,client,tx,amount)
     #[argh(positional)]
     trx_file: PathBuf,
 }
@@ -40,7 +48,7 @@ pub struct Args {
 /// Performs transaction processing based on parameters passed in `Arg` argument, updates passed accounts object.
 /// Function separated from `main()` to feature integration tests.
 /// See Integration tests in `tests` folder for example usage.
-pub async fn process(arg:&Args, accounts: &mut HashMap::<TClientId,AccountState>) -> Result<u128> {
+pub async fn process(arg:&Args) -> Result<(u128, HashMap::<TClientId,AccountState>)> {
     let trx_file = File::open(&arg.trx_file).await
         .with_context(|| format!("opening transactions file: {}", arg.trx_file.display()))?;
     let rdr = AsyncReaderBuilder::new()
@@ -49,6 +57,6 @@ pub async fn process(arg:&Args, accounts: &mut HashMap::<TClientId,AccountState>
         .trim(csv_async::Trim::All)
         .flexible(true)
         .create_deserializer(trx_file);
-    let processed = processor::processing_loop(rdr, accounts).await?;
-    Ok(processed)
+
+    processor::processing_loop(rdr, arg.wrk_num, arg.wrk_buff).await
 }

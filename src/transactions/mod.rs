@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
-use async_trait::async_trait;
+use anyhow::{Result, bail};
 use enum_dispatch::enum_dispatch;
 use serde::Deserialize;
 
@@ -25,18 +24,20 @@ use chargeback::Chargeback;
 /// Transaction Interface. Every transaction must implement it.
 /// `TryFrom` implementation should initialization of transaction from input record, 
 /// it may fail if input does not have all necessary data - in such case transaction will be discarded.
-#[async_trait]
 #[enum_dispatch]
 pub trait TransactionInt: TryFrom<TransactionRec> {
     /// Returns transaction id
     fn id(&self) -> TTrxID;
+    
+    /// Returns client id
+    fn client_id(&self) -> TClientId;
 
     /// Performs additional validation of transaction consistency with possibility to raise a warning.
     /// In case of `Ok`, and `Warn` transaction is being processed, `Invalid` result cause transaction to be rejected.
     fn validate(&self) -> TransactionValid;
 
     /// Actually performs transaction making necessary changes in passed accounts.
-    async fn commit(&self, accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()>;
+    fn commit(&self, accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()>;
 }
 
 /// Transaction object.
@@ -47,6 +48,28 @@ pub enum Transaction {
     Dispute,
     Resolve,
     Chargeback,
+    TheEnd
+}
+
+/// Fake transaction meaning end of stream.
+pub struct TheEnd;
+
+impl TryFrom<TransactionRec> for TheEnd {
+    type Error = anyhow::Error;
+    fn try_from(value: TransactionRec) -> std::result::Result<Self, Self::Error> {
+        bail!("Transaction ID {} - internal error in TheEnd::try_from()", value.tx)
+    }
+}
+
+impl TransactionInt for TheEnd {
+    fn id(&self) -> TTrxID {0}
+    fn client_id(&self) -> TClientId {0}
+    fn validate(&self) -> TransactionValid {
+        TransactionValid::Ok
+    }
+    fn commit(&self, _accounts:&mut HashMap::<TClientId,AccountState>) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// Result of transaction validation

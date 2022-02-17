@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use argh::FromArgs;
 use rust_decimal_macros::dec;
 
@@ -12,8 +10,7 @@ async fn amt_formats() {
         &[&arg0],
         &["tests/samples/i_amt_formats.csv"]
     ).expect("correxct command line");
-    let mut accounts = HashMap::new();
-    let rec = process(&arg, &mut accounts).await.expect("success");
+    let (rec, accounts) = process(&arg).await.expect("success");
     assert_eq!(rec, 5);
     let total = accounts.get(&2).expect("client 2 in test file").total();
     assert_eq!(total, dec!(5.4321));
@@ -29,8 +26,7 @@ async fn no_headers() {
             "--no-header"
         ]
     ).expect("correxct command line");
-    let mut accounts = HashMap::new();
-    let rec = process(&arg, &mut accounts).await.expect("success");
+    let (rec, _) = process(&arg).await.expect("success");
     assert!(rec > 0);
 }
 
@@ -44,8 +40,7 @@ async fn comments() {
             "--comments"
         ]
     ).expect("correxct command line");
-    let mut accounts = HashMap::new();
-    let rec = process(&arg, &mut accounts).await.expect("success");
+    let (rec, _) = process(&arg).await.expect("success");
     assert_eq!(rec, 5);
 }
 
@@ -56,8 +51,7 @@ async fn spaces_tabs() {
         &[&arg0],
         &["tests/samples/i_spaces_tabs.csv"]
     ).expect("correxct command line");
-    let mut accounts = HashMap::new();
-    let rec = process(&arg, &mut accounts).await.expect("success");
+    let (rec, _) = process(&arg).await.expect("success");
     assert_eq!(rec, 5);
 }
 
@@ -68,8 +62,7 @@ async fn out_of_order() {
         &[&arg0],
         &["tests/samples/i_ooo.csv"]
     ).expect("correxct command line");
-    let mut accounts = HashMap::new();
-    let rec = process(&arg, &mut accounts).await.expect("success");
+    let (rec, accounts) = process(&arg).await.expect("success");
     assert_eq!(rec, 5);
     let acct_no = accounts.len();
     assert_eq!(acct_no, 5);
